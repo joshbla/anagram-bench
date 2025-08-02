@@ -64,9 +64,9 @@ MODELS = [
 ]
 
 # Word lengths to test (e.g., 8-letter words up to 16-letter words)
-MIN_WORD_LENGTH = 8
-MAX_WORD_LENGTH = 9
-WORDS_PER_LENGTH = 2
+MIN_WORD_LENGTH = 5
+MAX_WORD_LENGTH = 15
+WORDS_PER_LENGTH = 20
 
 # Get rate limits from OpenRouter
 RATE_LIMIT_REQUESTS, RATE_LIMIT_INTERVAL = get_openrouter_rate_limits()

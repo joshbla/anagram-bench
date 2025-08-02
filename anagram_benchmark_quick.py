@@ -16,9 +16,9 @@ import anagram_benchmark
 anagram_benchmark.MODELS = [
     "moonshotai/kimi-k2"
 ]
-anagram_benchmark.MIN_WORD_LENGTH = 6
-anagram_benchmark.MAX_WORD_LENGTH = 12
-anagram_benchmark.WORDS_PER_LENGTH = 5
+anagram_benchmark.MIN_WORD_LENGTH = 5
+anagram_benchmark.MAX_WORD_LENGTH = 15
+anagram_benchmark.WORDS_PER_LENGTH = 20
 
 
 def main():
