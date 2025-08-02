@@ -14,13 +14,11 @@ load_dotenv(env_path)
 # Override constants for quick testing
 import anagram_benchmark
 anagram_benchmark.MODELS = [
-    "anthropic/claude-sonnet-4",
-    "google/gemini-2.5-pro", 
     "moonshotai/kimi-k2"
 ]
-anagram_benchmark.MIN_WORD_LENGTH = 8
-anagram_benchmark.MAX_WORD_LENGTH = 10
-anagram_benchmark.WORDS_PER_LENGTH = 2
+anagram_benchmark.MIN_WORD_LENGTH = 5
+anagram_benchmark.MAX_WORD_LENGTH = 15
+anagram_benchmark.WORDS_PER_LENGTH = 1
 
 
 def main():

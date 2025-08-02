@@ -90,8 +90,9 @@ class AnagramBenchmark:
         self.semaphore = threading.Semaphore(MAX_CONCURRENT_REQUESTS)
         self.results_lock = threading.Lock()
         
-        # Create output folder if it doesn't exist
-        self.output_folder = OUTPUT_FOLDER
+        # Create timestamped output folder
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        self.output_folder = os.path.join(OUTPUT_FOLDER, f"run_{timestamp}")
         os.makedirs(self.output_folder, exist_ok=True)
         print(f"Output folder: {os.path.abspath(self.output_folder)}")
         
@@ -202,8 +203,26 @@ Respond with ONLY the JSON object, no other text."""
             print(f"  Exception for {model}: {str(e)}")
             return None, 0, False
     
+    def test_single_word(self, model: str, word: str, length: int) -> dict:
+        """Test a single word with a model and return the result."""
+        with self.semaphore:
+            anagram, response_time, is_json_compliant = self.call_openrouter_api(model, word)
+        
+        is_valid = False
+        if anagram:
+            is_valid = self.is_valid_anagram(word, anagram)
+        
+        return {
+            'word': word,
+            'anagram': anagram,
+            'is_valid': is_valid,
+            'response_time': response_time,
+            'is_json_compliant': is_json_compliant,
+            'length': length
+        }
+    
     def test_single_model(self, model: str, model_idx: int):
-        """Test a single model on all words."""
+        """Test a single model on all words in parallel."""
         print(f"\nTesting Model {model_idx}/{len(MODELS)}: {model}")
         print("-" * 40)
         
@@ -216,53 +235,75 @@ Respond with ONLY the JSON object, no other text."""
             'json_compliance_rate': 0
         }
         
+        # Collect all words to test
+        all_words = []
+        for length in range(MIN_WORD_LENGTH, MAX_WORD_LENGTH + 1):
+            for word in self.word_samples[length]:
+                all_words.append((word, length))
+        
+        print(f"  Testing {len(all_words)} words in parallel (max {MAX_CONCURRENT_REQUESTS} concurrent)...")
+        
+        # Test all words in parallel
+        with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS) as executor:
+            futures = []
+            for word, length in all_words:
+                future = executor.submit(self.test_single_word, model, word, length)
+                futures.append(future)
+            
+            # Collect results
+            results = []
+            for future in futures:
+                try:
+                    result = future.result()
+                    results.append(result)
+                except Exception as e:
+                    print(f"\n  Error testing word: {str(e)}")
+        
+        # Process results
         response_times = []
         json_compliant_count = 0
         
-        # Test each word length
+        # Initialize results by length
         for length in range(MIN_WORD_LENGTH, MAX_WORD_LENGTH + 1):
-            length_results = {
+            model_results['results_by_length'][length] = {
                 'correct': 0,
                 'total': 0,
                 'examples': []
             }
+        
+        # Process each result
+        for result in results:
+            length = result['length']
+            response_times.append(result['response_time'])
             
-            # Test each word
-            for word in self.word_samples[length]:
-                print(f"  Testing '{word}' (length {length})...", end='')
-                
-                # Use semaphore to control concurrent requests
-                with self.semaphore:
-                    anagram, response_time, is_json_compliant = self.call_openrouter_api(model, word)
-                
-                response_times.append(response_time)
-                
-                if is_json_compliant:
-                    json_compliant_count += 1
-                
-                is_valid = False
-                if anagram:
-                    is_valid = self.is_valid_anagram(word, anagram)
-                
-                length_results['total'] += 1
-                if is_valid:
-                    length_results['correct'] += 1
-                    model_results['total_correct'] += 1
-                    
-                model_results['total_attempts'] += 1
-                
-                # Store example
-                length_results['examples'].append({
-                    'word': word,
-                    'anagram': anagram,
-                    'is_valid': is_valid,
-                    'response_time': response_time,
-                    'is_json_compliant': is_json_compliant
-                })
-                
-                print(f" → '{anagram}' ({'✓' if is_valid else '✗'})")
+            if result['is_json_compliant']:
+                json_compliant_count += 1
             
-            model_results['results_by_length'][length] = length_results
+            length_results = model_results['results_by_length'][length]
+            length_results['total'] += 1
+            
+            if result['is_valid']:
+                length_results['correct'] += 1
+                model_results['total_correct'] += 1
+            
+            model_results['total_attempts'] += 1
+            
+            # Store example
+            length_results['examples'].append({
+                'word': result['word'],
+                'anagram': result['anagram'],
+                'is_valid': result['is_valid'],
+                'response_time': result['response_time'],
+                'is_json_compliant': result['is_json_compliant']
+            })
+        
+        # Print results summary by length
+        print("\n  Results by word length:")
+        for length in range(MIN_WORD_LENGTH, MAX_WORD_LENGTH + 1):
+            length_data = model_results['results_by_length'][length]
+            if length_data['total'] > 0:
+                accuracy = length_data['correct'] / length_data['total'] * 100
+                print(f"    {length}-letter words: {length_data['correct']}/{length_data['total']} ({accuracy:.1f}%)")
         
         # Calculate summary statistics
         model_results['avg_response_time'] = np.mean(response_times) if response_times else 0
@@ -277,13 +318,15 @@ Respond with ONLY the JSON object, no other text."""
     
     def run_benchmark(self):
         """Run the complete benchmark across all models and words in parallel."""
+        # Generate word samples first
+        self.generate_word_samples()
+        
         print("\n" + "="*60)
         print("Starting Anagram Benchmark (Parallel Mode)")
-        print(f"Running up to {MAX_CONCURRENT_REQUESTS} models concurrently")
+        print(f"Rate limit: {MAX_CONCURRENT_REQUESTS} concurrent requests")
+        total_words = sum(len(words) for words in self.word_samples.values())
+        print(f"Testing {len(MODELS)} models with {total_words} words each = {len(MODELS) * total_words} total API calls")
         print("="*60 + "\n")
-        
-        # Generate word samples
-        self.generate_word_samples()
         
         # Clear results in case of re-run
         self.results = []
@@ -314,8 +357,7 @@ Respond with ONLY the JSON object, no other text."""
     def save_to_excel(self, filename: str = None):
         """Save all results and examples to an Excel file."""
         if filename is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"anagram_benchmark_results_{timestamp}.xlsx"
+            filename = "anagram_benchmark_results.xlsx"
         
         # Save to output folder
         filepath = os.path.join(self.output_folder, filename)
@@ -371,8 +413,7 @@ Respond with ONLY the JSON object, no other text."""
     def create_heatmap(self, save_path: str = None):
         """Create a heatmap visualization of model performance by word length."""
         if save_path is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            save_path = f"anagram_benchmark_heatmap_{timestamp}.png"
+            save_path = "anagram_benchmark_heatmap.png"
         
         # Save to output folder
         save_path = os.path.join(self.output_folder, save_path)
