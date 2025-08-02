@@ -1,0 +1,9 @@
+requests
+python-dotenv
+nltk
+pandas
+numpy
+matplotlib
+seaborn
+openpyxl
+aiohttp
