@@ -159,7 +159,7 @@ Respond with ONLY the JSON object, no other text."""
             
         headers = {
             "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "HTTP-Referer": "https://github.com/anagram-benchmark",
+            "HTTP-Referer": "anagram-benchmark",
             "X-Title": "Anagram Benchmark",
             "Content-Type": "application/json"
         }
