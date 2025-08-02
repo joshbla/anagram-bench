@@ -41,7 +41,7 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Output folder configuration
 OUTPUT_FOLDER = "benchmark_outputs"
 
-# Model list - different models to test
+# Top models from OpenRouter this week
 MODELS = [
     "anthropic/claude-sonnet-4",
     "google/gemini-2.5-flash",
