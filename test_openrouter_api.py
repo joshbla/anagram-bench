@@ -16,7 +16,7 @@ response = requests.post(
   url="https://openrouter.ai/api/v1/chat/completions",
   headers={
     "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-    "HTTP-Referer": "https://github.com/anagram-benchmark",
+    "HTTP-Referer": "anagram-benchmark",
     "X-Title": "Anagram Benchmark Test",
     "Content-Type": "application/json"
   },
