@@ -41,6 +41,9 @@ OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
 # Output folder configuration
 OUTPUT_FOLDER = "benchmark_outputs"
 
+# Dictionary validation configuration
+CHECK_DICTIONARY = True  # Set to False to allow non-dictionary words in anagrams
+
 # Top models from OpenRouter this week
 MODELS = [
     "anthropic/claude-sonnet-4",
@@ -82,9 +85,15 @@ else:
 
 
 class AnagramBenchmark:
-    def __init__(self):
-        """Initialize the benchmark with word dictionary and results storage."""
+    def __init__(self, check_dictionary=True):
+        """Initialize the benchmark with word dictionary and results storage.
+        
+        Args:
+            check_dictionary: If True, validate that anagram words exist in dictionary.
+                            If False, only check that letters match.
+        """
         self.word_list = [w.lower() for w in words.words() if w.isalpha() and w.islower()]
+        self.check_dictionary = check_dictionary
         self.results = []
         self.word_samples = {}
         self.semaphore = threading.Semaphore(MAX_CONCURRENT_REQUESTS)
@@ -116,16 +125,34 @@ class AnagramBenchmark:
     
     def is_valid_anagram(self, original: str, anagram: str) -> bool:
         """Check if the provided word is a valid anagram of the original."""
-        # Remove spaces and convert to lowercase
-        original = original.lower().replace(" ", "")
-        anagram = anagram.lower().replace(" ", "")
+        # Store the original anagram for word validation
+        anagram_with_spaces = anagram.lower()
+        
+        # Remove spaces and convert to lowercase for character comparison
+        original_clean = original.lower().replace(" ", "")
+        anagram_clean = anagram.lower().replace(" ", "")
         
         # Check if it's the same word (not a valid anagram)
-        if original == anagram:
+        if original_clean == anagram_clean:
             return False
             
         # Check if they have the same character counts
-        return Counter(original) == Counter(anagram)
+        original_counter = Counter(original_clean)
+        anagram_counter = Counter(anagram_clean)
+        
+        if original_counter != anagram_counter:
+            return False
+        
+        # If dictionary checking is enabled, verify all words are real English words
+        if self.check_dictionary:
+            anagram_words = anagram_with_spaces.split()
+            word_set = set(self.word_list)  # Convert to set for O(1) lookup
+            
+            for word in anagram_words:
+                if word not in word_set:
+                    return False
+        
+        return True
     
     def create_prompt(self, word: str) -> str:
         """Create a prompt for the AI model to generate an anagram."""
@@ -480,8 +507,9 @@ def main():
         return
     
     # Create and run benchmark
-    benchmark = AnagramBenchmark()
-    print(f"\nAll outputs will be saved to: {os.path.abspath(benchmark.output_folder)}/\n")
+    benchmark = AnagramBenchmark(check_dictionary=CHECK_DICTIONARY)
+    print(f"Dictionary checking: {'ENABLED' if CHECK_DICTIONARY else 'DISABLED'}")
+    print(f"All outputs will be saved to: {os.path.abspath(benchmark.output_folder)}/\n")
     
     try:
         # Run the benchmark
