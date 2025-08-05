@@ -416,7 +416,7 @@ Respond with ONLY the JSON object, no other text."""
             summary_df = pd.DataFrame(summary_data)
             summary_df.to_excel(writer, sheet_name='Summary', index=False)
             
-            # Examples sheet
+            # All Examples sheet (keeping this for compatibility)
             examples_data = []
             for result in self.results:
                 for length, length_results in result['results_by_length'].items():
@@ -434,7 +434,38 @@ Respond with ONLY the JSON object, no other text."""
             examples_df = pd.DataFrame(examples_data)
             examples_df.to_excel(writer, sheet_name='All Examples', index=False)
             
+            # Create a separate sheet for each model with their anagrams
+            for result in self.results:
+                model_name = result['model']
+                # Truncate sheet name if too long (Excel has 31 char limit)
+                sheet_name = model_name.replace('/', '_')[-31:]
+                
+                model_data = []
+                for length, length_results in result['results_by_length'].items():
+                    for example in length_results['examples']:
+                        model_data.append({
+                            'Word Length': length,
+                            'Original Word': example['word'],
+                            'Generated Anagram': example['anagram'] if example['anagram'] else 'No anagram generated',
+                            'Is Valid': '✓' if example['is_valid'] else '✗',
+                            'Response Time (s)': f"{example['response_time']:.2f}"
+                        })
+                
+                if model_data:
+                    model_df = pd.DataFrame(model_data)
+                    # Sort by word length and then by original word
+                    model_df = model_df.sort_values(['Word Length', 'Original Word'])
+                    model_df.to_excel(writer, sheet_name=sheet_name, index=False)
+                    
+                    # Auto-adjust column widths for better readability
+                    worksheet = writer.sheets[sheet_name]
+                    for column in model_df:
+                        column_width = max(model_df[column].astype(str).map(len).max(), len(column))
+                        col_idx = model_df.columns.get_loc(column)
+                        worksheet.column_dimensions[chr(65 + col_idx)].width = min(column_width + 2, 50)
+            
         print(f"Results saved to {filepath}")
+        print(f"  - Created {len(self.results) + 2} sheets: Summary, All Examples, and one sheet per model")
         return filepath
     
     def create_heatmap(self, save_path: str = None):
